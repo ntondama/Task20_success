@@ -1,0 +1,5 @@
+wordpress_db_name: wordpress
+wordpress_db_user: admin
+wordpress_db_password: admin123
+mysql_server_private_ip: 172.31.8.202
+

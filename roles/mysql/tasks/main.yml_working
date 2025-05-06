@@ -1,0 +1,87 @@
+---
+- name: Install MariaDB Server
+  yum:
+    name: mariadb-server
+    state: present
+  become: yes
+
+- name: Start and Enable MariaDB Service
+  service:
+    name: mariadb
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Install Python and pip (for PyMySQL)
+  yum:
+    name: python3-pip
+    state: present
+  become: yes
+
+- name: Ensure pip is available
+  command: pip3 --version
+  register: pip_status
+  become: yes
+
+- name: Print pip Status
+  debug:
+    msg: "{{ pip_status.stdout_lines }}"
+
+- name: Install PyMySQL via pip
+  pip:
+    name: pymysql
+    state: present
+    executable: pip3  # Forces Ansible to use pip3 explicitly
+  become: yes
+
+- name: Ensure MariaDB is Running
+  command: systemctl status mariadb
+  register: mariadb_status
+  become: yes
+  ignore_errors: yes
+
+- name: Print MariaDB Status
+  debug:
+    msg: "{{ mariadb_status.stdout_lines }}"
+
+- name: Secure MariaDB Installation (Set Root Password)
+  community.mysql.mysql_user:
+    name: root
+    password: "{{ mysql_root_password }}"
+    host: localhost
+    state: present
+  become: yes
+
+- name: Create WordPress Database
+  community.mysql.mysql_db:
+    name: "{{ wordpress_db_name }}"
+    state: present
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  become: yes
+
+- name: Create WordPress User
+  community.mysql.mysql_user:
+    name: "{{ wordpress_db_user }}"
+    password: "{{ wordpress_db_password }}"
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    state: present
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  become: yes
+
+- name: Ensure Remote Access for WordPress User
+  community.mysql.mysql_user:
+    name: "{{ wordpress_db_user }}"
+    host: "%"
+    password: "{{ wordpress_db_password }}"
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    state: present
+  become: yes
+
+- name: Restart MariaDB Service
+  service:
+    name: mariadb
+    state: restarted
+  become: yes
+

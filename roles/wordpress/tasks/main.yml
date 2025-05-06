@@ -1,0 +1,64 @@
+---
+# Install Apache and PHP on Amazon Linux 2
+- name: Install Apache (httpd) using yum
+  shell: yum install -y httpd
+  become: true
+
+- name: Enable PHP 7.4 using amazon-linux-extras
+  shell: amazon-linux-extras enable php7.4
+  become: true
+
+- name: Install PHP 7.4 and necessary extensions
+  shell: yum install -y php php-mysqlnd php-fpm php-opcache php-gd php-mbstring
+  become: true
+
+- name: Ensure WordPress directory exists
+  file:
+    path: /var/www/html
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Download WordPress
+  get_url:
+    url: https://wordpress.org/latest.tar.gz
+    dest: /tmp/latest.tar.gz
+  become: true
+
+- name: Extract WordPress
+  unarchive:
+    src: /tmp/latest.tar.gz
+    dest: /var/www/html/
+    remote_src: yes
+  become: true
+
+- name: Ensure WordPress directory is owned by Apache
+  file:
+    path: /var/www/html/wordpress
+    owner: apache
+    group: apache
+    state: directory
+  become: true
+
+- name: Start Apache service
+  service:
+    name: httpd
+    state: started
+    enabled: true
+  become: true
+
+- name: Restart Apache to apply PHP upgrade
+  service:
+    name: httpd
+    state: restarted
+  become: true
+
+- name: Verify PHP version
+  shell: php -v
+  register: php_version
+  become: true
+
+- name: Display PHP version
+  debug:
+    msg: "Installed PHP version is: {{ php_version.stdout }}"
+

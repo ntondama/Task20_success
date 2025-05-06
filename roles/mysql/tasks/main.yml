@@ -1,0 +1,176 @@
+---
+- name: Include MySQL Variables
+  include_vars: "{{ role_path }}/vars/main.yml"
+
+- name: Ensure Python 2 RPM Bindings Are Installed
+  yum:
+    name: python2-rpm
+    state: present
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python2
+
+- name: Ensure Python 3 RPM Bindings Are Installed
+  yum:
+    name: python3-rpm
+    state: present
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python2
+
+- name: Install MariaDB Server
+  yum:
+    name: mariadb-server
+    state: present
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python2
+
+- name: Start and Enable MariaDB Service
+  service:
+    name: mariadb
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Install Python 3 and pip (for PyMySQL)
+  yum:
+    name: python3-pip
+    state: present
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python2
+
+- name: Ensure pip is available
+  command: pip3 --version
+  register: pip_status
+  become: yes
+
+- name: Print pip Status
+  debug:
+    msg: "{{ pip_status.stdout_lines }}"
+
+- name: Install PyMySQL via pip
+  pip:
+    name: pymysql
+    state: present
+    executable: pip3
+  become: yes
+
+- name: Ensure MariaDB is Running
+  command: systemctl status mariadb
+  register: mariadb_status
+  become: yes
+  ignore_errors: yes
+
+- name: Print MariaDB Status
+  debug:
+    msg: "{{ mariadb_status.stdout_lines }}"
+
+- name: Create MySQL config file for root user
+  copy:
+    dest: /root/.my.cnf
+    content: |
+      [client]
+      user=root
+      password={{ mysql_root_password }}
+    mode: '0600'
+  become: yes
+
+- name: Set root password if not already set
+  community.mysql.mysql_user:
+    name: root
+    host: localhost
+    password: "{{ mysql_root_password }}"
+    check_implicit_admin: true
+    login_unix_socket: /var/lib/mysql/mysql.sock
+    state: present
+  become: yes
+
+- name: Verify root login by running a simple query
+  community.mysql.mysql_query:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    query: "SELECT 1;"
+  register: mysql_test
+  become: yes
+  failed_when: mysql_test.failed
+  ignore_errors: false
+
+- name: Print MySQL Version
+  community.mysql.mysql_query:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    query: "SELECT VERSION();"
+  register: mysql_version
+  become: yes
+
+- name: Show MySQL Version
+  debug:
+    msg: "MySQL version is {{ mysql_version.query_result[0] }}"
+  when: mysql_version.query_result is defined and mysql_version.query_result | length > 0
+
+- name: Create WordPress Database
+  community.mysql.mysql_db:
+    name: "{{ wordpress_db_name }}"
+    state: present
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  become: yes
+
+- name: Create WordPress User
+  community.mysql.mysql_user:
+    name: "{{ wordpress_db_user }}"
+    password: "{{ wordpress_db_password }}"
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    state: present
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  become: yes
+
+- name: Ensure Remote Access for WordPress User
+  community.mysql.mysql_user:
+    name: "{{ wordpress_db_user }}"
+    host: "%"
+    password: "{{ wordpress_db_password }}"
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    state: present
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  become: yes
+
+- name: Restart MariaDB Service
+  service:
+    name: mariadb
+    state: restarted
+  become: yes
+
+# WordPress Prerequisites
+- name: Install Apache and PHP for WordPress
+  yum:
+    name:
+      - httpd
+      - php
+      - php-mysqlnd
+      - php-fpm
+    state: present
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python2
+
+- name: Start and Enable Apache
+  service:
+    name: httpd
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Ensure PHP is installed
+  command: php -v
+  register: php_version
+  become: yes
+
+- name: Print PHP Version
+  debug:
+    msg: "{{ php_version.stdout }}"
+

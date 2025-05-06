@@ -1,0 +1,13 @@
+---
+- hosts: mysql
+  vars_files:
+    - roles/mysql/vars/main.yml
+  roles:
+    - mysql
+
+- hosts: wordpress
+  vars_files:
+    - roles/wordpress/vars/main.yml
+  roles:
+    - wordpress
+
